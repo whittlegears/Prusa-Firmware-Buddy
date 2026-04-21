@@ -20,10 +20,16 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.intersphinx',
     'sphinx.ext.todo',
+    'myst_parser',
     'sphinx_autodoc_typehints',
 ]
 
 templates_path = ['_templates']
+
+source_suffix = {
+    '.rst': 'restructuredtext',
+    '.md': 'markdown',
+}
 
 exclude_patterns = ['_build']
 
