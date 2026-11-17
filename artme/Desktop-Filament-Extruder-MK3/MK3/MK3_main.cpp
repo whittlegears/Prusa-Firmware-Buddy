@@ -172,6 +172,7 @@
 // M666 - set delta endstop adjustment
 // M605 - Set dual x-carriage movement mode: S<mode> [ X<duplication x-offset> R<duplication temp offset> ]
 // M700 - Extruder data dump 
+// M951 - Printhead link: S<screw rpm> T<barrel target degC> K<check>, answers with "PH T:<degC> /<target> R:<rpm> F:<flags>"
 // M907 - Set digital trimpot motor current using axis codes.
 // M908 - Control digital trimpot directly.
 // M350 - Set microstepping mode.
@@ -195,6 +196,11 @@ CardReader card;
 float homing_feedrate[] = HOMING_FEEDRATE;
 bool axis_relative_modes[] = AXIS_RELATIVE_MODES;
 unsigned char extrude_status =0;
+#ifdef PRINTHEAD_LINK
+bool printhead_mode = false;
+float printhead_rpm = 0;
+static unsigned long printhead_last_cmd_ms = 0;
+#endif
 float filament_width_desired= DESIRED_FILAMENT_DIA; //holds the desired filament width (i.e like 2.6mm)
 int feedmultiply; //100->1 200->2
 int saved_feedmultiply;
@@ -745,7 +751,12 @@ void loop()
 // stop and cooldown when heated and extruder does not run for more than 20 minutes-safety cooldown
   if  ((extrude_status & ES_HOT_SET) > 0)  {
     
+    #ifdef PRINTHEAD_LINK
+    // while printing the screw may legitimately turn slower than 1 rpm
+    if (printhead_mode ? (extruder_rpm <= 0) : (extruder_rpm < 1)) {
+    #else
     if (extruder_rpm < 1) {
+    #endif
       // MYSERIAL.println("sensor runout detected");
       if (safetycooldownStartTimeMS == 0) {
         // MYSERIAL.println("starting timeout");
@@ -810,6 +821,9 @@ void loop()
   if(((degHotend(active_extruder) >= (degTargetHotend(active_extruder)-TEMP_WINDOW)) && (degHotend(active_extruder) <= (degTargetHotend(active_extruder)+TEMP_WINDOW)))  && ((extrude_status & ES_TEMP_SET)==0))  //check if extruder at or near setpoint
   	  {
 	  extrude_status=extrude_status | ES_TEMP_SET;
+    #ifdef PRINTHEAD_LINK
+    if (!printhead_mode) {  // the beeps block for 3.5 s, which would drop the link
+    #endif
     WRITE(BEEPER,HIGH);
 	  delay(1000); //Änderunge 31.05.2020 5.Eichbaum
     WRITE(BEEPER,LOW);
@@ -817,11 +831,47 @@ void loop()
     WRITE(BEEPER,HIGH);
     delay(1000); //Änderunge 31.05.2020
     WRITE(BEEPER,LOW);
+    #ifdef PRINTHEAD_LINK
+    }
+    #endif
 	  LCD_MESSAGEPGM(MSG_HEATING_COMPLETE);
   	  }
   	
   
   
+#ifdef PRINTHEAD_LINK
+  if (printhead_mode) {
+	  // A printer owns the screw. No puller, no winder, no filament-width control.
+	  const unsigned long silent_ms = millis() - printhead_last_cmd_ms;
+	  winderSpeed = 0;
+	  extrude_status = extrude_status & ES_ENABLE_CLEAR_NO_AUTO;
+	  puller_feedrate = 0;
+	  if (silent_ms > PRINTHEAD_LINK_SCREW_TIMEOUT_MS)
+		  printhead_rpm = 0;
+	  if (silent_ms > PRINTHEAD_LINK_HEATER_TIMEOUT_MS) {
+		  setTargetHotend0(0);
+		  printhead_mode = false;
+		  LCD_MESSAGEPGM("Printer link lost");
+	  }
+
+	  if (printhead_mode && printhead_rpm >= PRINTHEAD_LINK_RPM_MIN
+			  && (extrude_status & ES_HOT_SET) && (extrude_status & ES_SWITCH_SET)) {
+		  extruder_rpm = printhead_rpm;
+		  duration = duration + deltatime;
+		  if (movesplanned() < PRINTHEAD_LINK_QUEUE) {
+			  extruder_feedrate = printhead_rpm/0.6;  //same rpm -> feedrate relation as stand-alone mode
+			  destination[E_AXIS] = current_position[E_AXIS] + extruder_feedrate*PRINTHEAD_LINK_BLOCK_S;
+			  destination[P_AXIS] = current_position[P_AXIS];
+			  feedrate = extruder_feedrate;
+			  previous_millis_cmd = millis();  //refresh the kill watchdog timer
+			  plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], destination[P_AXIS], feedrate, active_extruder);
+			  current_position[E_AXIS]=destination[E_AXIS];
+		  }
+	  } else {
+		  extruder_rpm = 0;
+	  }
+  } else
+#endif
   if((extrude_status & ES_ENABLE_SET) >0){
 	  
 	  
@@ -3369,6 +3419,43 @@ void process_commands()
       #endif
     }
     break;
+#ifdef PRINTHEAD_LINK
+	case 951: // M951 S<rpm> T<target degC> K<check> - printhead link from a 3D printer
+	{
+		// K = (round(S*100) + round(T)) mod 251, so a garbled line never becomes a speed or a temperature
+		if (code_seen('S') && code_seen('T') && code_seen('K')) {
+			code_seen('S');
+			const float rpm = code_value();
+			code_seen('T');
+			const float target = code_value();
+			code_seen('K');
+			const long check = code_value_long();
+			if (rpm >= 0 && rpm <= 100 && target >= 0 && target <= 500
+					&& ((long)(rpm*100.0 + 0.5) + (long)(target + 0.5)) % 251 == check) {
+				if (!printhead_mode) {
+					printhead_mode = true;
+					LCD_MESSAGEPGM("Printer link active");
+				}
+				printhead_last_cmd_ms = millis();
+				printhead_rpm = constrain(rpm, 0, EXTRUDER_RPM_MAX);
+				const float clamped_target = constrain(target, 0, HEATER_0_MAXTEMP - 15);
+				if (clamped_target != degTargetHotend(0))
+					setTargetHotend0(clamped_target);
+			}
+		}
+		// Status is sent even for a rejected command; the printer stops on stale or implausible data.
+		SERIAL_PROTOCOLPGM("PH T:");
+		SERIAL_PROTOCOL_F(degHotend(0), 1);
+		SERIAL_PROTOCOLPGM(" /");
+		SERIAL_PROTOCOL_F(degTargetHotend(0), 0);
+		SERIAL_PROTOCOLPGM(" R:");
+		SERIAL_PROTOCOL_F(extruder_rpm, 2);
+		SERIAL_PROTOCOLPGM(" F:");
+		SERIAL_PROTOCOL((int)((printhead_mode ? 1 : 0) | ((extrude_status & ES_HOT_SET) ? 2 : 0) | ((extrude_status & ES_SWITCH_SET) ? 4 : 0)));
+		SERIAL_PROTOCOLLNPGM("");
+	}
+	break;
+#endif
 	case 700: // M700 - Extruder data dump 
 	{
 		// Duration and time remaining

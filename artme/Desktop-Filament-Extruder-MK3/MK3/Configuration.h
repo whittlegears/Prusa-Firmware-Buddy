@@ -91,11 +91,34 @@ debug notes:
 // SERIAL_PORT selects which serial port should be used for communication with the host.
 // This allows the connection of wireless adapters (for instance) to non-default port pins.
 // Serial port 0 is still used by the Arduino bootloader regardless of this setting.
-#define SERIAL_PORT 0
+// PRINTHEAD_LINK: lets a 3D printer (Prusa Core One, firmware built with
+// ARTME_LINK=ON) use this extruder as its print head. The printer sends
+// "M951 S<screw rpm> T<barrel target degC> K<check>" about ten times a second
+// and this board answers with its temperature. Puller and winder stay off.
+// See artme/README.md at the top of this repository.
+#define PRINTHEAD_LINK
+
+#ifdef PRINTHEAD_LINK
+  // The link uses its own UART so the USB port stays free of printer traffic:
+  // Serial1 = D18 (TX1, "Z-" endstop signal pin) and D19 (RX1, "Z+" endstop signal pin).
+  // Flashing over USB still works (the bootloader always uses port 0).
+  // Set to 0 to talk G-code over USB again (then the link is on D0/D1).
+  #define SERIAL_PORT 1
+  #define PRINTHEAD_LINK_SCREW_TIMEOUT_MS   1500   // no valid M951 for this long: screw stops
+  #define PRINTHEAD_LINK_HEATER_TIMEOUT_MS  10000  // ... for this long: heater off, back to stand-alone mode
+  #define PRINTHEAD_LINK_RPM_MIN  0.05  // below this the screw is held still
+  #define PRINTHEAD_LINK_BLOCK_S  0.1   // length of one queued screw move in seconds
+  #define PRINTHEAD_LINK_QUEUE    3     // screw moves kept in the planner; BLOCK_S * QUEUE = worst-case reaction time
+#else
+  #define SERIAL_PORT 0
+#endif
 
 // This determines the communication speed of the printer
-// This determines the communication speed of the printer
-#define BAUDRATE 250000
+#ifdef PRINTHEAD_LINK
+  #define BAUDRATE 115200  // fixed speed of the printer's MMU port
+#else
+  #define BAUDRATE 250000
+#endif
 
 // This enables the serial port associated to the Bluetooth interface
 //#define BTENABLED              // Enable BT interface on AT90USB devices

@@ -207,6 +207,10 @@ extern float puller_feedrate;
 extern float homing_feedrate[];
 extern bool axis_relative_modes[];
 extern unsigned char extrude_status;
+#ifdef PRINTHEAD_LINK
+extern bool printhead_mode;   // true while a printer is driving the screw over the link
+extern float printhead_rpm;   // screw speed requested by the printer
+#endif
 #define ES_ENABLE_SET 1
 #define ES_SWITCH_SET 2
 #define ES_AUTO_SET 4
