@@ -1,11 +1,13 @@
 /// @file
 #include "app.hpp"
 
+#include "artme.hpp"
 #include "hal.hpp"
 #include "mmu.hpp"
 #include "modbus.hpp"
 #include "temperature.hpp"
 #include <freertos/timing.hpp>
+#include <xbuddy_extension_shared/artme_bridge.hpp>
 #include <xbuddy_extension_shared/mmu_bridge.hpp>
 
 namespace {
@@ -13,6 +15,7 @@ namespace {
 // TODO decide how to handle weird indexing schizophrenia caused by PuppyBootstrap::get_modbus_address_for_dock()
 constexpr uint16_t MY_MODBUS_ADDR = 0x1a + 7;
 constexpr uint16_t MMU_MODBUS_ADDR = xbuddy_extension_shared::mmu_bridge::modbusUnitNr;
+constexpr uint16_t ARTME_MODBUS_ADDR = xbuddy_extension_shared::artme_bridge::modbusUnitNr;
 
 class Logic final : public modbus::Callbacks {
 public:
@@ -93,12 +96,15 @@ public:
     // Do we want these to be some kind of number-value array, or is this hardcoded thing good enough?
     Logic logic;
     MMU mmu;
+    Artme artme;
     Status read_register(uint8_t device, uint16_t address, uint16_t &out) {
         switch (device) {
         case MY_MODBUS_ADDR:
             return logic.read_register(device, address, out);
         case MMU_MODBUS_ADDR:
             return mmu.read_register(device, address, out);
+        case ARTME_MODBUS_ADDR:
+            return artme.read_register(device, address, out);
         default:
             return Status::Ignore;
         }
@@ -110,6 +116,8 @@ public:
             return logic.write_register(device, address, value);
         case MMU_MODBUS_ADDR:
             return mmu.write_register(device, address, value);
+        case ARTME_MODBUS_ADDR:
+            return artme.write_register(device, address, value);
         default:
             return Status::Ignore;
         }

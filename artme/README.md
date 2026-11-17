@@ -41,7 +41,7 @@ the extruder answers `PH T:<barrel temp> /<target> R:<rpm> F:<flags>`.
 | --- | --- | --- |
 | `artme/Desktop-Filament-Extruder-MK3/` | ARTME MKS Gen L | ARTME's MK3 firmware (main branch, commit `348eca6`) plus `PRINTHEAD_LINK`: the `M951` command, link on Serial1, timeouts. Stand-alone filament making still works when no printer is talking to it. |
 | `src/puppy/xbuddy_extension/artme.*` | xBuddy extension board | Passes commands and answers between the internal bus and the MMU port. |
-| `src/feature/artme_link/` and hooks in Marlin | Core One mainboard | Temperature from the link, E motion to screw speed, `M951` G-code, error handling. Only with `ARTME_LINK=ON`. |
+| `src/common/feature/artme_link/` and hooks in Marlin | Core One mainboard | Temperature from the link, E motion to screw speed, `M951` G-code, error handling. Only with `ARTME_LINK=ON`. |
 
 ## Wiring
 
@@ -65,7 +65,7 @@ Core One (also builds and bundles the extension board firmware, which the printe
 flashes by itself):
 
 ```
-python utils/build.py --preset coreone --bootloader yes -D ARTME_LINK=ON
+python utils/build.py --preset coreone --bootloader yes -D ARTME_LINK:BOOL=ON
 ```
 
 The firmware is unsigned, so the printer needs its appendix broken to accept it, as

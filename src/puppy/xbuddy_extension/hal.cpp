@@ -22,7 +22,7 @@ static freertos::BinarySemaphore tx_semaphore_rs485;
 static UART_HandleTypeDef huart_mmu;
 static std::byte rx_byte_mmu;
 static std::span<const std::byte> rx_byte_span_mmu { &rx_byte_mmu, 1 };
-static freertos::StreamBuffer<32> rx_mmu_buffer;
+static freertos::StreamBuffer<128> rx_mmu_buffer; // large enough for a whole status line of the ARTME bridge
 static freertos::BinarySemaphore tx_semaphore_mmu;
 
 // Default prescaler for our timers.

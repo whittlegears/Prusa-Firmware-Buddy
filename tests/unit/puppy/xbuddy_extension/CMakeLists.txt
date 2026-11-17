@@ -5,6 +5,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/lib/Prusa-Firmware-MMU/src/modules/protocol.cpp
   modbus_tests.cpp
   modbus-mmu_tests.cpp
+  artme_bridge_tests.cpp
   )
 target_include_directories(
   xbuddy_extension_modbus_tests

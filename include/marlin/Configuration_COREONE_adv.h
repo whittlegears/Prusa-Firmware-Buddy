@@ -24,6 +24,7 @@
 // clang-format off
 
 #include <buddy/filename_defs.h>
+#include <option/has_artme_link.h>
 #include <option/has_crash_detection.h>
 #include <option/has_pause.h>
 #include <option/has_power_panic.h>
@@ -83,7 +84,12 @@
    * and/or decrease WATCH_TEMP_INCREASE. WATCH_TEMP_INCREASE should not be set
    * below 2.
    */
-    #define WATCH_TEMP_PERIOD 20 // Seconds
+    #if HAS_ARTME_LINK()
+        // The barrel of the screw extruder is much heavier than a nozzle and heats up slowly
+        #define WATCH_TEMP_PERIOD 120 // Seconds
+    #else
+        #define WATCH_TEMP_PERIOD 20 // Seconds
+    #endif
     #define WATCH_TEMP_INCREASE 2 // Degrees Celsius
 #endif
 

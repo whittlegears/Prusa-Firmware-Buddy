@@ -16,6 +16,10 @@ if(HAS_XBUDDY_EXTENSION)
   add_subdirectory(xbuddy_extension)
 endif()
 
+if(HAS_ARTME_LINK)
+  add_subdirectory(artme_link)
+endif()
+
 if(HAS_CHAMBER_API)
   add_subdirectory(chamber)
 endif()

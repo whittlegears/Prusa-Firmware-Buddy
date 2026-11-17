@@ -54,6 +54,10 @@
 #include <feature/print_status_message/print_status_message_guard.hpp>
 #include <i18n.h>
 #include <option/has_chamber_api.h>
+#include <option/has_artme_link.h>
+#if HAS_ARTME_LINK()
+  #include <feature/artme_link/artme_link.hpp>
+#endif
 #if HAS_CHAMBER_API()
 #include "feature/chamber/chamber.hpp"
 #endif
@@ -1486,6 +1490,11 @@ void Temperature::manage_heater() {
         thermal_runaway_protection(tr_state_machine[e], temp_hotend[e].celsius, temp_hotend[e].target, (heater_ind_t)e, THERMAL_PROTECTION_PERIOD, THERMAL_PROTECTION_HYSTERESIS);
       #endif
 
+      #if HAS_ARTME_LINK()
+        // The ARTME extruder regulates its own heater. Our heater output must stay off
+        // whatever is plugged into it, because we are not measuring it.
+        temp_hotend[e].soft_pwm_amount = 0;
+      #else
         {
       #if ENABLED(MODEL_DETECT_STUCK_THERMISTOR)
           float pid_output = .0f;
@@ -1503,6 +1512,7 @@ void Temperature::manage_heater() {
           thermal_model_protection(pid_output, feed_forward, e);
       #endif
         }
+      #endif // HAS_ARTME_LINK()
 
       #if WATCH_HOTENDS
         if (hotend_idle[e].timed_out)
@@ -1900,6 +1910,9 @@ void Temperature::updateTemperaturesFromRawValues() {
   #if HOTENDS
     #if ENABLED(PRUSA_TOOLCHANGER)
       HOTEND_LOOP() temp_hotend[e].celsius = prusa_toolchanger.getTool(e).get_hotend_temp();
+    #elif HAS_ARTME_LINK()
+      // The barrel is heated and measured by the ARTME extruder, nothing is on our thermistor input
+      HOTEND_LOOP() temp_hotend[e].celsius = artme_link::hotend_celsius();
     #else
       HOTEND_LOOP() temp_hotend[e].celsius = analog_to_celsius_hotend(temp_hotend[e].raw, e);
     #endif
@@ -2576,7 +2589,7 @@ void Temperature::readings_ready() {
             || temp_hotend[e].soft_pwm_amount > 0
           #endif
         );
-      #if ENABLED(PRUSA_TOOLCHANGER)
+      #if ENABLED(PRUSA_TOOLCHANGER) || HAS_ARTME_LINK()
         if (temp_hotend[e].celsius > temp_range[e].maxtemp) // Toolchanger doesn't report raw
       #else /*ENABLED(PRUSA_TOOLCHANGER)*/
         if (rawtemp > temp_range[e].raw_max * tdir)
@@ -2585,7 +2598,7 @@ void Temperature::readings_ready() {
           max_temp_error((heater_ind_t)e);
         }
 
-      #if ENABLED(PRUSA_TOOLCHANGER)
+      #if ENABLED(PRUSA_TOOLCHANGER) || HAS_ARTME_LINK()
         if (heater_on && temp_hotend[e].celsius < temp_range[e].mintemp) // Toolchanger doesn't report raw
       #else /*ENABLED(PRUSA_TOOLCHANGER)*/
         if (heater_on && rawtemp < temp_range[e].raw_min * tdir)
