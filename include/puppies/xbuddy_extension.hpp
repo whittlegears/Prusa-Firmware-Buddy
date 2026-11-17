@@ -5,6 +5,8 @@
 #include "PuppyBus.hpp"
 #include <atomic>
 #include <freertos/mutex.hpp>
+#include <option/has_artme_link.h>
+#include <xbuddy_extension_shared/artme_bridge.hpp>
 #include <xbuddy_extension_shared/mmu_bridge.hpp>
 #include <xbuddy_extension_shared/xbuddy_extension_shared_enums.hpp>
 
@@ -127,6 +129,22 @@ public:
 
     const MMUQueryRegisters &mmu_query_registers() const { return mmuQuery; }
 
+#if HAS_ARTME_LINK()
+    struct ArtmeState {
+        float temperature; ///< barrel temperature, degC
+        uint16_t target; ///< target the extruder regulates to, degC
+        float rpm; ///< screw speed
+        uint16_t flags; ///< xbuddy_extension_shared::artme_bridge::Flag
+        uint32_t age_ms; ///< time since the extruder last answered
+    };
+
+    /// Sets what is sent to the ARTME extruder with every refresh. Called from the marlin task.
+    void set_artme_command(float rpm, uint16_t target);
+
+    /// @returns last state reported by the ARTME extruder, nullopt if it has not answered yet
+    std::optional<ArtmeState> get_artme_state() const;
+#endif
+
 #ifndef UNITTESTS
 private:
 #endif
@@ -186,6 +204,32 @@ private:
     MMUModbusRequest mmuModbusRq;
 
     CommunicationStatus refresh_mmu();
+
+#if HAS_ARTME_LINK()
+    MODBUS_REGISTER ArtmeCommand {
+        uint16_t rpm_x100 = 0;
+        uint16_t target = 0;
+    };
+    ModbusHoldingRegisterBlock<xbuddy_extension_shared::artme_bridge::commandRpmRegisterAddress, ArtmeCommand> artme_command;
+
+    MODBUS_REGISTER ArtmeStatus {
+        uint16_t temperature_x10 = 0;
+        uint16_t target = 0;
+        uint16_t rpm_x100 = 0;
+        uint16_t flags = 0;
+        uint16_t reply_counter = 0;
+    };
+    ModbusInputRegisterBlock<xbuddy_extension_shared::artme_bridge::statusTemperatureRegisterAddress, ArtmeStatus> artme_status;
+
+    static constexpr uint32_t artme_period_ms = 100;
+    uint32_t artme_last_exchange_ms = 0;
+    uint32_t artme_last_reply_ms = 0;
+    uint16_t artme_last_reply_counter = 0;
+    bool artme_counter_known = false; ///< reply counter of the extension board was read at least once
+    bool artme_replied = false; ///< the extruder answered at least once
+
+    void refresh_artme();
+#endif
 };
 
 extern XBuddyExtension xbuddy_extension;

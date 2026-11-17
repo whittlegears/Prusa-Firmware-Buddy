@@ -331,6 +331,17 @@ set_feature_for_printers_master_board(HAS_PUPPY_MODULARBED "iX" "XL" "XL_DEV_KIT
 set_feature_for_printers_master_board(HAS_XBUDDY_EXTENSION "COREONE")
 set_feature_for_printers_master_board(XBUDDY_EXTENSION_VARIANT_STANDARD "COREONE")
 
+# ARTME 3D screw extruder used as the print head, wired to the MMU port of the xBuddy extension
+# board. Its own controller heats the barrel and turns the screw; see artme/README.md.
+set(ARTME_LINK
+    "OFF"
+    CACHE BOOL "Use an ARTME 3D screw extruder on the MMU port as the print head"
+    )
+if(ARTME_LINK AND NOT HAS_XBUDDY_EXTENSION)
+  message(FATAL_ERROR "ARTME_LINK needs a printer with the xBuddy extension board (COREONE)")
+endif()
+define_boolean_option(HAS_ARTME_LINK ${ARTME_LINK})
+
 # MK4 technically doesn't have door sensor but needs to check valid FW-HW
 set_feature_for_printers_master_board(HAS_DOOR_SENSOR "COREONE" "MK4")
 set_feature_for_printers(HAS_TOOLCHANGER "XL" "XL_DEV_KIT")

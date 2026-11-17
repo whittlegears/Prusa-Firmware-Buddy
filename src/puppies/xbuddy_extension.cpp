@@ -1,5 +1,6 @@
 #include <puppies/xbuddy_extension.hpp>
 #include <puppies/PuppyBootstrap.hpp>
+#include <algorithm>
 #include <cassert>
 #include "timing.h"
 
@@ -188,6 +189,12 @@ CommunicationStatus XBuddyExtension::refresh() {
     // Note: might change in the future, therefore keeping the same interface like refresh_input
     refresh_mmu();
 
+#if HAS_ARTME_LINK()
+    // Same as with the MMU: a silent extruder is not a failure of the extension board.
+    // The marlin task watches the age of the last answer and stops the printer.
+    refresh_artme();
+#endif
+
     if (input == CommunicationStatus::ERROR || holding == CommunicationStatus::ERROR) {
         return CommunicationStatus::ERROR;
     } else if (input == CommunicationStatus::SKIPPED && holding == CommunicationStatus::SKIPPED) {
@@ -353,6 +360,55 @@ CommunicationStatus XBuddyExtension::refresh_mmu() {
         return CommunicationStatus::SKIPPED;
     }
 }
+
+#if HAS_ARTME_LINK()
+void XBuddyExtension::refresh_artme() {
+    // Already locked by caller.
+    using namespace xbuddy_extension_shared::artme_bridge;
+
+    const uint32_t now = last_ticks_ms();
+    if (ticks_diff(now, artme_last_exchange_ms) < static_cast<int32_t>(artme_period_ms)) {
+        return;
+    }
+    artme_last_exchange_ms = now;
+
+    // Pick up the answer to the previous command first...
+    if (bus.read(modbusUnitNr, artme_status, 0) == CommunicationStatus::OK) {
+        const uint16_t counter = artme_status.value.reply_counter;
+        if (artme_counter_known && counter != artme_last_reply_counter) {
+            artme_last_reply_ms = now;
+            artme_replied = true;
+        }
+        artme_last_reply_counter = counter;
+        artme_counter_known = true;
+    }
+
+    // ... then send the next one. It is repeated even when unchanged, the extruder
+    // stops its screw and later its heater when the commands stop coming.
+    artme_command.dirty = true;
+    bus.write(modbusUnitNr, artme_command);
+}
+
+void XBuddyExtension::set_artme_command(float rpm, uint16_t target) {
+    Lock lock(mutex);
+    artme_command.value.rpm_x100 = static_cast<uint16_t>(std::clamp(rpm, 0.f, 600.f) * 100.f + 0.5f);
+    artme_command.value.target = target;
+}
+
+std::optional<XBuddyExtension::ArtmeState> XBuddyExtension::get_artme_state() const {
+    Lock lock(mutex);
+    if (!artme_replied) {
+        return std::nullopt;
+    }
+    return ArtmeState {
+        .temperature = artme_status.value.temperature_x10 / 10.f,
+        .target = artme_status.value.target,
+        .rpm = artme_status.value.rpm_x100 / 100.f,
+        .flags = artme_status.value.flags,
+        .age_ms = static_cast<uint32_t>(ticks_diff(last_ticks_ms(), artme_last_reply_ms)),
+    };
+}
+#endif
 
 bool XBuddyExtension::mmu_response_received(uint32_t rqSentTimestamp_ms) const {
     int32_t td = ~0U;

@@ -22,6 +22,7 @@ endif()
 target_sources(
   firmware
   PRIVATE app.cpp
+          artme.cpp
           cmsis.cpp
           hal.cpp
           hal_clock.cpp

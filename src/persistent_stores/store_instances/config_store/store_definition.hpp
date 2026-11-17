@@ -24,6 +24,7 @@
 #include <module/prusa/tool_offset.hpp>
 #include <filament_sensors_remap_data.hpp>
 #include <tristate.hpp>
+#include <option/has_artme_link.h>
 #include <option/has_loadcell.h>
 #include <option/has_sheet_profiles.h>
 #include <option/has_adc_side_fsensor.h>
@@ -325,6 +326,11 @@ struct CurrentStore
 
     StoreItem<uint16_t, defaults::print_progress_time, ItemFlag::user_interface, journal::hash("Print Progress Time")> print_progress_time; // screen progress time in seconds
     StoreItem<bool, true, ItemFlag::hw_config | ItemFlag::dev_items, journal::hash("TMC Wavetable Enabled")> tmc_wavetable_enabled; // wavetable in TMC drivers
+
+#if HAS_ARTME_LINK()
+    /// Melt volume the ARTME screw extruder pushes out per screw revolution [mm3]. Starting value only, has to be calibrated (M951 V).
+    StoreItem<float, 300.f, ItemFlag::calibrations, journal::hash("ARTME mm3 per rev")> artme_mm3_per_rev;
+#endif
 
 #if HAS_MMU2()
     StoreItem<bool, false, ItemFlag::features, journal::hash("MMU2 Enabled")> mmu2_enabled;

@@ -59,6 +59,10 @@
 #include "module/printcounter.h" // PrintCounter or Stopwatch
 #include "feature/closedloop.h"
 #include <option/board_is_master_board.h>
+#include <option/has_artme_link.h>
+#if HAS_ARTME_LINK()
+  #include <feature/artme_link/artme_link.hpp>
+#endif
 #if BOARD_IS_MASTER_BOARD()
 #include "pause_stubbed.hpp"
 #endif
@@ -500,6 +504,10 @@ void idle(bool waiting) {
 
   #if ENABLED(PRUSA_MMU2)
     MMU2::mmu2.mmu_loop();
+  #endif
+
+  #if HAS_ARTME_LINK()
+    artme_link::step();
   #endif
 
   #if HAS_PLANNER()
